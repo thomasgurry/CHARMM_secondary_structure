@@ -1,0 +1,714 @@
+module usermod
+  logical :: printe_flag = .false., printe_off = .false.
+  integer :: iuene
+
+contains
+
+SUBROUTINE USERSB
+  !
+  !     THIS DOES NOTHING SAVE TELL USER THAT HE CALLED A NULL PROGRAM.
+  !
+  !     Author: Robert Bruccoleri
+  !
+  use chm_kinds
+  use stream
+  use comand
+  use string
+  implicit none
+  !
+  CALL WRNDIE(1,'<USERSB>','USERSB CALLED. NO ACTION TAKEN.')
+  RETURN
+END SUBROUTINE USERSB
+
+SUBROUTINE USERE(EU,X,Y,Z,DX,DY,DZ,QECONT,ECONT,NATOMX,IP,JP,KP,LP,NPHI)
+  !
+  !     THE USER ENERGY ROUTINE. DOES NOTHING IN THE NORMAL SYSTEM
+  !     EXCEPT SET EU TO ZERO. QECONT IS A FLAG WHICH WILL BE SET TO 1
+  !     WHEN THE ROUTINE IS CALLED IN THE QECONTIS SECTION. INDIVIDUAL
+  !     ATOM USER ENERGIES ARE THEN RETURNED IN ECONT, AND THE DERIVATIVE
+  !     ARRAYS SHOULD NOT BE ACCESSED.
+  !
+  !
+  !     EU   - User energy to be returned
+  !     X,Y,Z - Coordinates for energy evaluation
+  !     DX,DY,DZ - Forces. Must be modified. Append (dE/dX,...)
+  !     QECONT - Flag for analysis (0-no analysis,>0=analysis)
+  !     ECONT(NATOMX) - Analysis array to be filled if QECONT>0.
+  !     NATOMX - Number of atoms
+  !
+  !     Author: Robert Bruccoleri
+  !
+  !
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  !
+  !     Modification comments:
+  !     
+  !        Remember to respecify NDIHE and array lengths for 
+  !        each new molecule/problem.
+  !        Ensure any external calls to USERE() subroutine includes
+  !        new arguments.
+  !
+  !        Modification author: Thomas Gurry (thomasgurry@gmail.com)
+  !
+  ! 
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+  use chm_kinds
+  use number
+  !
+  implicit none
+  !
+  real(chm_real) EU
+  INTEGER NATOMX
+  real(chm_real) X(NATOMX),Y(NATOMX),Z(NATOMX)
+  real(chm_real) DX(NATOMX),DY(NATOMX),DZ(NATOMX)
+  LOGICAL QECONT
+  real(chm_real) ECONT(NATOMX)
+  INTEGER NPHI 
+  INTEGER IP(NPHI),JP(NPHI),KP(NPHI),LP(NPHI),ICP(NPHI)
+  INTEGER NDIHE
+  INTEGER PHI_INDICES(30)
+  INTEGER PSI_INDICES(30)
+  real(chm_real) TAU_BETA
+  real(chm_real) F_BETA
+  real(chm_real) PHI_BETA
+  real(chm_real) PSI_BETA
+  real(chm_real) R_BETA
+  real(chm_real) PHI_VALS_RAD(30),PSI_VALS_RAD(30)
+  real(chm_real) PHI_VALS_DEG(30),PSI_VALS_DEG(30)
+  real(chm_real) PI  
+  real(chm_real) F_BETA_NAUGHT,K_CONST
+  INTEGER IDIHE
+  INTEGER PHI_IND
+  INTEGER PSI_IND
+  INTEGER I,J,K,L
+  real(chm_real) FX,FY,FZ,GX,GY,GZ,HX,HY,HZ
+  real(chm_real) AX,AY,AZ,BX,BY,BZ
+  real(chm_real) CP,SP
+  real(8) F_BETA_I,D_I,F_BETA_SUM,NDIHE_REAL  
+  real(chm_real) RG,RG2,RGR,RA2,RB2,RA2R,RB2R,RABR
+  real(chm_real) PHI_SINE,PHI_COS,PSI_SINE,PSI_COS
+  real(chm_real) EPS,DIFF,PROD,ABSDIFF
+  real(chm_real) GAA,GBB,FG,HG,FGA,HGB,FGRG2,HGRG2,DFRG3
+  real(chm_real) DFX,DFY,DFZ,DHX,DHY,DHZ,DGX,DGY,DGZ
+  real(chm_real) DTFX_PHI,DTFY_PHI,DTFZ_PHI,DTHX_PHI,DTHY_PHI,DTHZ_PHI,DTGX_PHI,DTGY_PHI,DTGZ_PHI
+  real(chm_real) DTFX_PSI,DTFY_PSI,DTFZ_PSI,DTHX_PSI,DTHY_PSI,DTHZ_PSI,DTGX_PSI,DTGY_PSI,DTGZ_PSI
+  real(chm_real) GAFX,GAFY,GAFZ,GBHX,GBHY,GBHZ
+  real(chm_real) FAGX,FAGY,FAGZ,HBGX,HBGY,HBGZ
+  real(chm_real) D_FBETA_DFX(30,2),D_FBETA_DFY(30,2),D_FBETA_DFZ(30,2)
+  real(chm_real) D_FBETA_DGX(30,2),D_FBETA_DGY(30,2),D_FBETA_DGZ(30,2)
+  real(chm_real) D_FBETA_DHX(30,2),D_FBETA_DHY(30,2),D_FBETA_DHZ(30,2)
+  real(chm_real) D_DI_DFX_PHI,D_DI_DFY_PHI,D_DI_DFZ_PHI
+  real(chm_real) D_DI_DGX_PHI,D_DI_DGY_PHI,D_DI_DGZ_PHI
+  real(chm_real) D_DI_DHX_PHI,D_DI_DHY_PHI,D_DI_DHZ_PHI
+  real(chm_real) D_DI_DFX_PSI,D_DI_DFY_PSI,D_DI_DFZ_PSI
+  real(chm_real) D_DI_DGX_PSI,D_DI_DGY_PSI,D_DI_DGZ_PSI
+  real(chm_real) D_DI_DHX_PSI,D_DI_DHY_PSI,D_DI_DHZ_PSI
+  real(chm_real) D_I2,FRONTTERM
+  real(8) PHI_DIFF_REAL,PSI_DIFF_REAL,PHI_DIFF_ABS,PSI_DIFF_ABS,SHIFTED_PHI_DIFF,SHIFTED_PSI_DIFF
+  real(8) PHI_DIFF(30),PSI_DIFF(30)
+  LOGICAL ANGLE_DIFFERENCES_FLAG
+
+  ! Define constants
+  F_BETA_NAUGHT=0.00
+  K_CONST=4000.0
+  PI=3.1415926535
+  TAU_BETA=0.0029
+  PHI_BETA=-152.0
+  PSI_BETA=142.0
+  R_BETA=62.0  
+  EPS=0.0001
+  ANGLE_DIFFERENCES_FLAG=.false.
+
+  ! Number of dihedral pairs of relevance
+
+  PHI_INDICES=(/6,12,18,22,27,32,39,49,54,58,63,68,71,77, &
+              82,86,89,94,100,110,113,116,121,126,129,134, &
+              140,144,147,150/)
+  PSI_INDICES=(/7,13,19,23,28,33,40,50,55,59,64,69,72,78, &
+              83,87,90,95,101,111,114,117,122,127,130,135, &
+              141,145,148,151/)
+
+  NDIHE=30
+
+  ! Compute angles for each of these dihedrals.
+  DO IDIHE=1,NDIHE
+     ! Phi angle
+     PHI_IND=PHI_INDICES(IDIHE)
+     PSI_IND=PSI_INDICES(IDIHE)
+     I=IP(PHI_IND)
+     J=JP(PHI_IND)
+     K=KP(PHI_IND)
+     L=LP(PHI_IND)
+     ! F=Ri-Rj, G=Rj-Rk, H-Rl-Rk.
+     FX=X(I)-X(J)
+     FY=Y(I)-Y(J)
+     FZ=Z(I)-Z(J)
+     GX=X(J)-X(K)
+     GY=Y(J)-Y(K)
+     GZ=Z(J)-Z(K)
+     HX=X(L)-X(K)
+     HY=Y(L)-Y(K)
+     HZ=Z(L)-Z(K)
+     ! A=F^G, B=H^G
+     AX=FY*GZ-FZ*GY
+     AY=FZ*GX-FX*GZ
+     AZ=FX*GY-FY*GX
+     BX=HY*GZ-HZ*GY
+     BY=HZ*GX-HX*GZ
+     BZ=HX*GY-HY*GX
+     ! RG=|G|, RGR=1/|G|
+     RA2=AX*AX+AY*AY+AZ*AZ
+     RB2=BX*BX+BY*BY+BZ*BZ
+     RG2=GX*GX+GY*GY+GZ*GZ
+     RG=SQRT(RG2)
+     !
+     RGR=ONE/RG
+     RA2R=ONE/RA2
+     RB2R=ONE/RB2
+     RABR=SQRT(RA2R*RB2R)
+     ! CP=cos(phi)
+     CP=(AX*BX+AY*BY+AZ*BZ)*RABR
+     ! SP=sin(phi), Note that sin(phi).G/|G|=B^A/(|A|.|B|)
+     ! which can be simplify to sin(phi)=|G|H.A/(|A|.|B|)
+     SP=RG*RABR*(AX*HX+AY*HY+AZ*HZ)
+     ! PHI = arccos(cos(psi)) = arcsin(sin(phi))
+     PHI_SINE=ASIN(SP)
+     PHI_COS=ACOS(CP)
+     ! Angle rule to find Phi uniquely if -pi < phi < pi
+     DIFF=ABS(PHI_SINE-PHI_COS)
+     PROD=PHI_SINE*PHI_COS
+     ABSDIFF=ABS(PHI_SINE)-ABS(PHI_COS)
+     ABSDIFF=ABS(ABSDIFF)
+     IF(DIFF.lt.EPS) THEN
+        PHI_VALS_RAD(IDIHE)=PHI_SINE
+     ELSEIF((PROD.lt.0).AND.(ABSDIFF.lt.EPS)) THEN
+        PHI_VALS_RAD(IDIHE)=PHI_SINE
+     ELSE
+        IF(PROD.gt.0) THEN
+           PHI_VALS_RAD(IDIHE)=PHI_COS
+        ELSE
+           PHI_VALS_RAD(IDIHE)=-1.0*PHI_COS
+        ENDIF
+     ENDIF
+     PHI_VALS_DEG(IDIHE)=PHI_VALS_RAD(IDIHE)*180.0/PI
+     !
+     ! Calculate d(phi)/dFi, d(phi)/dGi, d(phi)/dHi
+     !
+     ! GAA=-|G|/A^2, GBB=|G|/B^2, FG=F.G, HG=H.G
+     !  FGA=F.G/(|G|A^2), HGB=H.G/(|G|B^2)
+     FG=FX*GX+FY*GY+FZ*GZ
+     HG=HX*GX+HY*GY+HZ*GZ
+     FGA=FG*RA2R*RGR
+     HGB=HG*RB2R*RGR
+     GAA=-RA2R*RG
+     GBB=RB2R*RG
+     ! DTFi=d(phi)/dFi, DTGi=d(phi)/dGi, DTHi=d(phi)/dHi.
+     DTFX_PHI=GAA*AX
+     DTFY_PHI=GAA*AY
+     DTFZ_PHI=GAA*AZ
+     DTGX_PHI=FGA*AX-HGB*BX
+     DTGY_PHI=FGA*AY-HGB*BY
+     DTGZ_PHI=FGA*AZ-HGB*BZ
+     DTHX_PHI=GBB*BX
+     DTHY_PHI=GBB*BY
+     DTHZ_PHI=GBB*BZ
+
+     ! Psi angle
+     I=IP(PSI_IND)
+     J=JP(PSI_IND)
+     K=KP(PSI_IND)
+     L=LP(PSI_IND)
+     ! F=Ri-Rj, G=Rj-Rk, H-Rl-Rk.
+     FX=X(I)-X(J)
+     FY=Y(I)-Y(J)
+     FZ=Z(I)-Z(J)
+     GX=X(J)-X(K)
+     GY=Y(J)-Y(K)
+     GZ=Z(J)-Z(K)
+     HX=X(L)-X(K)
+     HY=Y(L)-Y(K)
+     HZ=Z(L)-Z(K)
+     ! A=F^G, B=H^G
+     AX=FY*GZ-FZ*GY
+     AY=FZ*GX-FX*GZ
+     AZ=FX*GY-FY*GX
+     BX=HY*GZ-HZ*GY
+     BY=HZ*GX-HX*GZ
+     BZ=HX*GY-HY*GX
+     ! RG=|G|, RGR=1/|G|
+     RA2=AX*AX+AY*AY+AZ*AZ
+     RB2=BX*BX+BY*BY+BZ*BZ
+     RG2=GX*GX+GY*GY+GZ*GZ
+     RG=SQRT(RG2)
+     !
+     RGR=ONE/RG
+     RA2R=ONE/RA2
+     RB2R=ONE/RB2
+     RABR=SQRT(RA2R*RB2R)
+     ! CP=cos(psi)
+     CP=(AX*BX+AY*BY+AZ*BZ)*RABR
+     ! SP=sin(psi), Note that sin(psi).G/|G|=B^A/(|A|.|B|)
+     ! which can be simplify to sin(psi)=|G|H.A/(|A|.|B|)
+     SP=RG*RABR*(AX*HX+AY*HY+AZ*HZ)
+     ! PSI = arccos( cos(psi) )
+     PSI_SINE=ASIN(SP)
+     PSI_COS=ACOS(CP)
+     ! Angle rule to find Psi uniquely if -pi < psi < pi
+     DIFF=ABS(PSI_SINE-PSI_COS)
+     PROD=PSI_SINE*PSI_COS
+     ABSDIFF=ABS(PSI_SINE)-ABS(PSI_COS)
+     ABSDIFF=ABS(ABSDIFF)
+     IF(DIFF.lt.EPS) THEN
+        PSI_VALS_RAD(IDIHE)=PSI_SINE
+     ELSEIF((PROD.lt.0).AND.(ABSDIFF.lt.EPS)) THEN
+        PSI_VALS_RAD(IDIHE)=PSI_SINE
+     ELSE
+        IF(PROD.gt.0) THEN
+           PSI_VALS_RAD(IDIHE)=PSI_COS
+        ELSE
+           PSI_VALS_RAD(IDIHE)=-1.0*PSI_COS
+        ENDIF
+     ENDIF
+     PSI_VALS_DEG(IDIHE)=PSI_VALS_RAD(IDIHE)*180.0/PI
+     !
+     ! Calculate d(psi)/dFi, d(psi)/dGi, d(psi)/dHi
+     !
+     ! GAA=-|G|/A^2, GBB=|G|/B^2, FG=F.G, HG=H.G
+     !  FGA=F.G/(|G|A^2), HGB=H.G/(|G|B^2)
+     FG=FX*GX+FY*GY+FZ*GZ
+     HG=HX*GX+HY*GY+HZ*GZ
+     FGA=FG*RA2R*RGR
+     HGB=HG*RB2R*RGR
+     GAA=-RA2R*RG
+     GBB=RB2R*RG
+     ! DTFi=d(psi)/dFi, DTGi=d(psi)/dGi, DTHi=d(psi)/dHi.
+     DTFX_PSI=GAA*AX
+     DTFY_PSI=GAA*AY
+     DTFZ_PSI=GAA*AZ
+     DTGX_PSI=FGA*AX-HGB*BX
+     DTGY_PSI=FGA*AY-HGB*BY
+     DTGZ_PSI=FGA*AZ-HGB*BZ
+     DTHX_PSI=GBB*BX
+     DTHY_PSI=GBB*BY
+     DTHZ_PSI=GBB*BZ
+     
+     !
+     ! Compute derivatives wrt Cartesian coordinates.
+     !
+     IF(.NOT.QECONT) THEN
+        !
+        ! Compute D_I
+        !
+
+        ! Phi
+        PHI_DIFF_REAL=PHI_VALS_DEG(IDIHE)-PHI_BETA
+        PHI_DIFF_ABS=ABS(PHI_DIFF_REAL)
+        ! Find minimum difference
+        IF(PHI_DIFF_REAL.lt.0) THEN
+           SHIFTED_PHI_DIFF=PHI_DIFF_REAL+360.0
+           IF(ABS(SHIFTED_PHI_DIFF).lt.PHI_DIFF_ABS) THEN
+              PHI_DIFF(IDIHE)=SHIFTED_PHI_DIFF
+           ELSE
+              PHI_DIFF(IDIHE)=PHI_DIFF_REAL
+           ENDIF
+        ELSE
+           SHIFTED_PHI_DIFF=PHI_DIFF_REAL-360.0
+           IF(ABS(SHIFTED_PHI_DIFF).lt.PHI_DIFF_ABS) THEN
+              PHI_DIFF(IDIHE)=SHIFTED_PHI_DIFF
+           ELSE
+              PHI_DIFF(IDIHE)=PHI_DIFF_REAL
+           ENDIF
+        ENDIF
+                
+        ! Psi
+        PSI_DIFF_REAL=PSI_VALS_DEG(IDIHE)-PSI_BETA
+        PSI_DIFF_ABS=ABS(PSI_DIFF_REAL)
+        ! Find minimum difference
+        IF(PSI_DIFF_REAL.lt.0) THEN
+           SHIFTED_PSI_DIFF=PSI_DIFF_REAL+360.0
+           IF(ABS(SHIFTED_PSI_DIFF).lt.PSI_DIFF_ABS) THEN
+              PSI_DIFF(IDIHE)=SHIFTED_PSI_DIFF
+           ELSE
+              PSI_DIFF(IDIHE)=PSI_DIFF_REAL
+           ENDIF
+        ELSE
+           SHIFTED_PSI_DIFF=PSI_DIFF_REAL-360.0
+           IF(ABS(SHIFTED_PSI_DIFF).lt.PSI_DIFF_ABS) THEN
+              PSI_DIFF(IDIHE)=SHIFTED_PSI_DIFF
+           ELSE
+              PSI_DIFF(IDIHE)=PSI_DIFF_REAL
+           ENDIF
+        ENDIF
+
+        ANGLE_DIFFERENCES_FLAG=.true.
+
+        D_I=(PHI_DIFF(IDIHE)*PHI_DIFF(IDIHE))+(PSI_DIFF(IDIHE)*PSI_DIFF(IDIHE))
+        D_I=SQRT(D_I)
+        D_I2=D_I
+        D_I=D_I-R_BETA
+        IF(D_I.le.0) THEN
+           D_FBETA_DFX(IDIHE,1)=0
+           D_FBETA_DFX(IDIHE,2)=0
+           D_FBETA_DFY(IDIHE,1)=0
+           D_FBETA_DFY(IDIHE,2)=0
+           D_FBETA_DFZ(IDIHE,1)=0
+           D_FBETA_DFZ(IDIHE,2)=0
+           D_FBETA_DGX(IDIHE,1)=0
+           D_FBETA_DGX(IDIHE,2)=0
+           D_FBETA_DGY(IDIHE,1)=0
+           D_FBETA_DGY(IDIHE,2)=0
+           D_FBETA_DGZ(IDIHE,1)=0
+           D_FBETA_DGZ(IDIHE,2)=0
+           D_FBETA_DHX(IDIHE,1)=0
+           D_FBETA_DHX(IDIHE,2)=0
+           D_FBETA_DHY(IDIHE,1)=0
+           D_FBETA_DHY(IDIHE,2)=0
+           D_FBETA_DHZ(IDIHE,1)=0
+           D_FBETA_DHZ(IDIHE,2)=0
+        ELSE
+           ! Compute derivatives of D^2_I wrt F,G,H
+           FRONTTERM=2*D_I/D_I2
+           D_DI_DFX_PHI=FRONTTERM*(PHI_DIFF(IDIHE)*DTFX_PHI)
+           D_DI_DFX_PSI=FRONTTERM*(PSI_DIFF(IDIHE)*DTFX_PSI)
+           D_DI_DFY_PHI=FRONTTERM*(PHI_DIFF(IDIHE)*DTFY_PHI)
+           D_DI_DFY_PSI=FRONTTERM*(PSI_DIFF(IDIHE)*DTFY_PSI)
+           D_DI_DFZ_PHI=FRONTTERM*(PHI_DIFF(IDIHE)*DTFZ_PHI)
+           D_DI_DFZ_PSI=FRONTTERM*(PSI_DIFF(IDIHE)*DTFZ_PSI)
+           D_DI_DGX_PHI=FRONTTERM*(PHI_DIFF(IDIHE)*DTGX_PHI)
+           D_DI_DGX_PSI=FRONTTERM*(PSI_DIFF(IDIHE)*DTGX_PSI)
+           D_DI_DGY_PHI=FRONTTERM*(PHI_DIFF(IDIHE)*DTGY_PHI)
+           D_DI_DGY_PSI=FRONTTERM*(PSI_DIFF(IDIHE)*DTGY_PSI)
+           D_DI_DGZ_PHI=FRONTTERM*(PHI_DIFF(IDIHE)*DTGZ_PHI)
+           D_DI_DGZ_PSI=FRONTTERM*(PSI_DIFF(IDIHE)*DTGZ_PSI)
+           D_DI_DHX_PHI=FRONTTERM*(PHI_DIFF(IDIHE)*DTHX_PHI)
+           D_DI_DHX_PSI=FRONTTERM*(PSI_DIFF(IDIHE)*DTHX_PSI)
+           D_DI_DHY_PHI=FRONTTERM*(PHI_DIFF(IDIHE)*DTHY_PHI)
+           D_DI_DHY_PSI=FRONTTERM*(PSI_DIFF(IDIHE)*DTHY_PSI)
+           D_DI_DHZ_PHI=FRONTTERM*(PHI_DIFF(IDIHE)*DTHZ_PHI)
+           D_DI_DHZ_PSI=FRONTTERM*(PSI_DIFF(IDIHE)*DTHZ_PSI)
+           !
+           ! Compute derivatives of U_FBETA wrt F,G,H
+           ! These derivatives only require current dihedral angles, all others are 0
+           !
+           FRONTTERM=-1.0*TAU_BETA*EXP(-1.0*TAU_BETA*D_I*D_I)
+           D_FBETA_DFX(IDIHE,1)=FRONTTERM*D_DI_DFX_PHI
+           D_FBETA_DFX(IDIHE,2)=FRONTTERM*D_DI_DFX_PSI
+           D_FBETA_DFY(IDIHE,1)=FRONTTERM*D_DI_DFY_PHI
+           D_FBETA_DFY(IDIHE,2)=FRONTTERM*D_DI_DFY_PSI
+           D_FBETA_DFZ(IDIHE,1)=FRONTTERM*D_DI_DFZ_PHI
+           D_FBETA_DFZ(IDIHE,2)=FRONTTERM*D_DI_DFZ_PSI
+           D_FBETA_DGX(IDIHE,1)=FRONTTERM*D_DI_DGX_PHI
+           D_FBETA_DGX(IDIHE,2)=FRONTTERM*D_DI_DGX_PSI
+           D_FBETA_DGY(IDIHE,1)=FRONTTERM*D_DI_DGY_PHI
+           D_FBETA_DGY(IDIHE,2)=FRONTTERM*D_DI_DGY_PSI
+           D_FBETA_DGZ(IDIHE,1)=FRONTTERM*D_DI_DGZ_PHI
+           D_FBETA_DGZ(IDIHE,2)=FRONTTERM*D_DI_DGZ_PSI
+           D_FBETA_DHX(IDIHE,1)=FRONTTERM*D_DI_DHX_PHI
+           D_FBETA_DHX(IDIHE,2)=FRONTTERM*D_DI_DHX_PSI
+           D_FBETA_DHY(IDIHE,1)=FRONTTERM*D_DI_DHY_PHI
+           D_FBETA_DHY(IDIHE,2)=FRONTTERM*D_DI_DHY_PSI
+           D_FBETA_DHZ(IDIHE,1)=FRONTTERM*D_DI_DHZ_PHI
+           D_FBETA_DHZ(IDIHE,2)=FRONTTERM*D_DI_DHZ_PSI
+        ENDIF   
+     ENDIF      
+  ENDDO
+  
+  !
+  ! Compute the individual f_beta from Vitalis et al (2009)
+  !
+  ! If angle differences from center of beta basin 
+  ! not computed in force section, compute here.
+  IF(.NOT.ANGLE_DIFFERENCES_FLAG) THEN
+     ! Phi
+     PHI_DIFF_REAL=PHI_VALS_DEG(IDIHE)-PHI_BETA
+     PHI_DIFF_ABS=ABS(PHI_DIFF_REAL)
+     ! Find minimum difference
+     IF(PHI_DIFF_REAL.lt.0) THEN
+        SHIFTED_PHI_DIFF=PHI_DIFF_REAL+360.0
+        IF(ABS(SHIFTED_PHI_DIFF).lt.PHI_DIFF_ABS) THEN
+           PHI_DIFF(IDIHE)=SHIFTED_PHI_DIFF
+        ELSE
+           PHI_DIFF(IDIHE)=PHI_DIFF_REAL
+        ENDIF
+     ELSE
+        SHIFTED_PHI_DIFF=PHI_DIFF_REAL-360.0
+        IF(ABS(SHIFTED_PHI_DIFF).lt.PHI_DIFF_ABS) THEN
+           PHI_DIFF(IDIHE)=SHIFTED_PHI_DIFF
+        ELSE
+           PHI_DIFF(IDIHE)=PHI_DIFF_REAL
+        ENDIF
+     ENDIF
+                
+     ! Psi
+     PSI_DIFF_REAL=PSI_VALS_DEG(IDIHE)-PSI_BETA
+     PSI_DIFF_ABS=ABS(PSI_DIFF_REAL)
+     ! Find minimum difference
+     IF(PSI_DIFF_REAL.lt.0) THEN
+        SHIFTED_PSI_DIFF=PSI_DIFF_REAL+360.0
+        IF(ABS(SHIFTED_PSI_DIFF).lt.PSI_DIFF_ABS) THEN
+           PSI_DIFF(IDIHE)=SHIFTED_PSI_DIFF
+        ELSE
+           PSI_DIFF(IDIHE)=PSI_DIFF_REAL
+        ENDIF
+     ELSE
+        SHIFTED_PSI_DIFF=PSI_DIFF_REAL-360.0
+        IF(ABS(SHIFTED_PSI_DIFF).lt.PSI_DIFF_ABS) THEN
+           PSI_DIFF(IDIHE)=SHIFTED_PSI_DIFF
+        ELSE
+           PSI_DIFF(IDIHE)=PSI_DIFF_REAL
+        ENDIF
+     ENDIF
+     ANGLE_DIFFERENCES_FLAG=.true.
+  ENDIF
+
+  F_BETA_SUM=0.0
+  NDIHE_REAL=REAL(NDIHE)
+  DO IDIHE=1,NDIHE
+     D_I=(PHI_DIFF(IDIHE)*PHI_DIFF(IDIHE))+(PSI_DIFF(IDIHE)*PSI_DIFF(IDIHE))
+     D_I=SQRT(D_I)
+     D_I=D_I-R_BETA
+     IF(D_I.le.0) THEN
+        F_BETA_I=1.0
+     ELSE
+        D_I=D_I*D_I
+        F_BETA_I=EXP(-1.0*TAU_BETA*D_I)
+     ENDIF
+     F_BETA_SUM=F_BETA_SUM+F_BETA_I
+  ENDDO
+  F_BETA=F_BETA_SUM/NDIHE_REAL
+  
+  ! Compute the new energy term according to U_fbeta = k*(f_beta - f_beta_0)^2
+  EU=K_CONST*(F_BETA-F_BETA_NAUGHT)*(F_BETA-F_BETA_NAUGHT)
+
+  !
+  ! Distribute forces over Ri.
+  !
+  IF(.NOT.QECONT) THEN
+     FRONTTERM=2.0*K_CONST*(F_BETA-F_BETA_NAUGHT)
+     DO IDIHE=1,NDIHE
+        ! Phi angle
+        PHI_IND=PHI_INDICES(IDIHE)
+        I=IP(PHI_IND)
+        J=JP(PHI_IND)
+        K=KP(PHI_IND)
+        L=LP(PHI_IND)
+        ! Distribute over DX, DY and DZ
+        DX(I)=DX(I)+FRONTTERM*D_FBETA_DFX(IDIHE,1)
+        DY(I)=DY(I)+FRONTTERM*D_FBETA_DFY(IDIHE,1)
+        DZ(I)=DZ(I)+FRONTTERM*D_FBETA_DFZ(IDIHE,1)
+        DX(J)=DX(J)-FRONTTERM*D_FBETA_DFX(IDIHE,1)+FRONTTERM*D_FBETA_DGX(IDIHE,1)
+        DY(J)=DY(J)-FRONTTERM*D_FBETA_DFY(IDIHE,1)+FRONTTERM*D_FBETA_DGY(IDIHE,1)
+        DZ(J)=DZ(J)-FRONTTERM*D_FBETA_DFZ(IDIHE,1)+FRONTTERM*D_FBETA_DGZ(IDIHE,1)
+        DX(K)=DX(K)-FRONTTERM*D_FBETA_DHX(IDIHE,1)-FRONTTERM*D_FBETA_DGX(IDIHE,1)
+        DY(K)=DY(K)-FRONTTERM*D_FBETA_DHY(IDIHE,1)-FRONTTERM*D_FBETA_DGY(IDIHE,1)
+        DZ(K)=DZ(K)-FRONTTERM*D_FBETA_DHZ(IDIHE,1)-FRONTTERM*D_FBETA_DGZ(IDIHE,1)
+        DX(L)=DX(L)+FRONTTERM*D_FBETA_DHX(IDIHE,1)
+        DY(L)=DY(L)+FRONTTERM*D_FBETA_DHY(IDIHE,1)
+        DZ(L)=DZ(L)+FRONTTERM*D_FBETA_DHZ(IDIHE,1)
+
+        ! Psi angle
+        PSI_IND=PSI_INDICES(IDIHE)
+        I=IP(PSI_IND)
+        J=JP(PSI_IND)
+        K=KP(PSI_IND)
+        L=LP(PSI_IND)
+        ! Distribute over DX, DY and DZ
+        DX(I)=DX(I)+FRONTTERM*D_FBETA_DFX(IDIHE,2)
+        DY(I)=DY(I)+FRONTTERM*D_FBETA_DFY(IDIHE,2)
+        DZ(I)=DZ(I)+FRONTTERM*D_FBETA_DFZ(IDIHE,2)
+        DX(J)=DX(J)-FRONTTERM*D_FBETA_DFX(IDIHE,2)+FRONTTERM*D_FBETA_DGX(IDIHE,2)
+        DY(J)=DY(J)-FRONTTERM*D_FBETA_DFY(IDIHE,2)+FRONTTERM*D_FBETA_DGY(IDIHE,2)
+        DZ(J)=DZ(J)-FRONTTERM*D_FBETA_DFZ(IDIHE,2)+FRONTTERM*D_FBETA_DGZ(IDIHE,2)
+        DX(K)=DX(K)-FRONTTERM*D_FBETA_DHX(IDIHE,2)-FRONTTERM*D_FBETA_DGX(IDIHE,2)
+        DY(K)=DY(K)-FRONTTERM*D_FBETA_DHY(IDIHE,2)-FRONTTERM*D_FBETA_DGY(IDIHE,2)
+        DZ(K)=DZ(K)-FRONTTERM*D_FBETA_DHZ(IDIHE,2)-FRONTTERM*D_FBETA_DGZ(IDIHE,2)
+        DX(L)=DX(L)+FRONTTERM*D_FBETA_DHX(IDIHE,2)
+        DY(L)=DY(L)+FRONTTERM*D_FBETA_DHY(IDIHE,2)
+        DZ(L)=DZ(L)+FRONTTERM*D_FBETA_DHZ(IDIHE,2)
+     
+     ENDDO
+  ENDIF
+
+  ! Compute contribution to energy pair
+  IF(QECONT) THEN
+     DO I=1,NATOMX
+        ECONT(I)=0.0
+     ENDDO
+  ENDIF
+
+  RETURN
+END SUBROUTINE USERE
+
+SUBROUTINE USRACM(NATOMX,X,Y,Z,DX,DY,DZ,QECONT,ECONT,ICALL)
+  !
+  !     THE USER ACCUMULATION ROUTINE. DOES NOTHING IN THE NORMAL SYSTEM.
+  !     This routine is called every time the energy is evaluated.
+  !     The ICALL integer tells whether this is a "real" step for
+  !     minimization or dynamics.
+  !
+  !     X,Y,Z    - Coordinates for energy evaluation
+  !     DX,DY,DZ - Forces. Must be modified. Append (dE/dX,...)
+  !     ICALL    - ECALLS increment 
+  !
+  !     Author: B. Brooks
+  !
+  use chm_kinds
+  implicit none
+  INTEGER NATOMX
+  real(chm_real) X(NATOMX),Y(NATOMX),Z(NATOMX)
+  real(chm_real) DX(NATOMX),DY(NATOMX),DZ(NATOMX)
+  LOGICAL QECONT
+  real(chm_real) ECONT(*)
+  INTEGER ICALL
+  !
+  RETURN
+END SUBROUTINE USRACM
+
+SUBROUTINE USERNM(IUSER,X,Y,Z,XNORMA,YNORMA,ZNORMA,NATOMX)
+  !
+  !     THIS ROUTINE IS USED TO SETUP A GUESS NORMAL MODE, OR A MOTION
+  !     OF INTEREST TO BE ANALYSED, OR APPENDED TO THE COORDINATE SET.
+  !     THE CALLING SEQUENCE IS 3 ARRAYS WHICH ARE TO BE FILLED
+  !     WITH COORDINATE DISPLACEMENTS. (I.E. DONT MASS WEIGHT THEM)
+  !     SEE THE DOCUMENTATION OF VIBRAN FOR FURTHER DETAILS
+  !
+  !     IUSER  - Code for which function to use. This is only important
+  !               if more than one user mode is specified.
+  !     X,Y,Z   - Reference coordinates
+  !     XNORMA,YNORMA,ZNORMA - Mode vector to be filled
+  !     NATOMX  - Number of atoms
+  !
+  !     Author: Bernie Brooks
+  !
+  use chm_kinds
+  implicit none
+  INTEGER IUSER
+  INTEGER NATOMX
+  real(chm_real) X(NATOMX),Y(NATOMX),Z(NATOMX)
+  real(chm_real) XNORMA(NATOMX),YNORMA(NATOMX),ZNORMA(NATOMX)
+  !
+  INTEGER I
+  !
+  !     The default user mode is the radius of gyration motion about
+  !     the origin.
+  !
+  DO I=1,NATOMX
+     XNORMA(I)=X(I)
+     YNORMA(I)=Y(I)
+     ZNORMA(I)=Z(I)
+  ENDDO
+  !
+  CALL WRNDIE(1,'<USERNM>', &
+       'NO ROUTINE PROVIDED, RGYR MODE RETURNED')
+  RETURN
+END SUBROUTINE USERNM
+
+SUBROUTINE USRSEL(NTAGS,FLAGS,X,Y,Z,QCOOR)
+  !
+  !     THIS ROUTINE ALLOWS A USER TO SELECT ATOMS.
+  !
+  !     NTAGS - number of entries (atoms)
+  !     FLAGS(NTAGS) - array to hold selection values
+  !     X,Y,Z  - coordinates
+  !     QCOOR  - logical flag specifying that coordinates are present
+  !              If .FALSE., then the coordinates should not be accessed.
+  !
+  !     If an atom is selected, set FLAGS value to be nonzero.
+  !
+  !
+  use chm_kinds
+  implicit none
+  INTEGER NTAGS
+  INTEGER FLAGS(NTAGS)
+  real(chm_real) X(*),Y(*),Z(*)
+  LOGICAL QCOOR
+  !
+  INTEGER I
+  !
+  CALL WRNDIE(1,'<USRSEL>','NO USER SELECTION SPECIFIED')
+  !
+  !     THE DEFAULT USER SELECTION IS TO INCLUDE EVERYTHING
+  DO I=1,NTAGS
+     FLAGS(I)=1
+  ENDDO
+  RETURN
+END SUBROUTINE USRSEL
+
+
+SUBROUTINE USRTIM(SERVAL,QAT,NQ,ITIME, &
+     NATOMX,X,Y,Z,XREF,YREF,ZREF,NSKIP,DELTA,TVAL,ISLCT)
+  !
+  !     This routine allows the user to specify a time series
+  !     for use in CORREL.
+  !
+  !     SERVAL  - Value for time series specified in the ENTER command.
+  !                May be used for distinguishing time series, or for any
+  !                other purpose.
+  !     QAT(NQ)- List of atoms that were specified in the ENTER command
+  !     NQ     - Number of atoms specified in the ENTER command
+  !     ITIME  - Which time step is currenlty being processed
+  !     NATOMX - Number of atoms
+  !     X,Y,Z  - Coordinates for current time step
+  !     XREF,YREF,ZREF - Reference coordinates for time series
+  !     DELTA  - Time interval between steps in picoseconds.
+  !     TVAL   - Time series value returned
+  !     ISLCT  - The first atom selection array from the TRAJ command
+  !
+  use chm_kinds
+  implicit none
+  !
+  real(chm_real) SERVAL
+  INTEGER ITIME,NATOMX,NQ
+  INTEGER QAT(NQ)
+  real(chm_real) X(NATOMX),Y(NATOMX),Z(NATOMX)
+  real(chm_real) XREF(NATOMX),YREF(NATOMX),ZREF(NATOMX)
+  INTEGER NSKIP
+  real(chm_real) DELTA,TVAL
+  INTEGER ISLCT(*)
+  !
+  CALL WRNDIE(1,'<USECOR>','NO USER TIME SERIES SPECIFIED')
+  !
+  !     THE DEFAULT USER TIME SERIES IS SIMPLY THE TIME
+  TVAL=ITIME/DELTA
+  RETURN
+END SUBROUTINE USRTIM
+
+SUBROUTINE USRINI
+  !
+  !     This routine allows the user to specify a startup procedure.
+  !     This routine is invoked at the beginning of each CHARMM run.
+  !
+  use chm_kinds
+  implicit none
+  !
+  RETURN
+END SUBROUTINE USRINI
+
+SUBROUTINE USPAFL(I,XX,YY,ZZ,XY,XZ,YZ, &
+     XNORM,YNORM,ZNORM,NATOM,ISLCT)
+  !
+  !  This routine processes the user specific principal axis
+  !  fluctuation code.  See documentation for details.
+  !
+  use chm_kinds
+  implicit none
+  INTEGER I,NATOM
+  real(chm_real) XX(*),YY(*),ZZ(*),XY(*),XZ(*),YZ(*)
+  real(chm_real) XNORM(*),YNORM(*),ZNORM(*)
+  INTEGER ISLCT(*)
+  !
+  RETURN
+END SUBROUTINE USPAFL
+
+SUBROUTINE USER_RNGSPEC
+  ! specification for USER random number generator
+
+  IMPLICIT NONE
+
+  RETURN
+END SUBROUTINE USER_RNGSPEC
+
+
+end module usermod
